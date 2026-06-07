@@ -1,0 +1,163 @@
+// Prisma Schema - Sistem Tugas Akhir
+// Generator menggunakan prisma-client-js (standard Prisma v6)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===================== ENUMS =====================
+
+enum Role {
+  MAHASISWA
+  DOSEN
+  ADMIN
+}
+
+enum DosenSubRole {
+  PEMBIMBING_1
+  PEMBIMBING_2
+  PENGUJI_1
+  PENGUJI_2
+}
+
+enum StatusPendaftaran {
+  MENUNGGU       // Menunggu konfirmasi dosen
+  DITERIMA       // Diterima dosen pembimbing
+  DITOLAK        // Ditolak dosen pembimbing
+  DISETUJUI_ADMIN // Final disetujui admin
+}
+
+// ===================== MODELS =====================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  password      String
+  role          Role      @default(MAHASISWA)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relasi ke profil masing-masing role
+  mahasiswa     Mahasiswa?
+  dosen         Dosen?
+
+  // NextAuth sessions
+  sessions      Session[]
+  accounts      Account[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Mahasiswa {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  nim       String   @unique
+  angkatan  String?
+  prodi     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pendaftaranTugasAkhir PendaftaranTugasAkhir[]
+}
+
+model Dosen {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  nidn      String?  @unique
+  prodi     String?
+  maxSlot   Int      @default(5)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Sebagai dosen pembimbing 1
+  bimbingan1 PendaftaranTugasAkhir[] @relation("Pembimbing1")
+  // Sebagai dosen pembimbing 2
+  bimbingan2 PendaftaranTugasAkhir[] @relation("Pembimbing2")
+  // Sebagai dosen penguji 1
+  pengujian1 PendaftaranTugasAkhir[] @relation("Penguji1")
+  // Sebagai dosen penguji 2
+  pengujian2 PendaftaranTugasAkhir[] @relation("Penguji2")
+}
+
+model PendaftaranTugasAkhir {
+  id               String            @id @default(cuid())
+  mahasiswaId      String
+  judulTA          String
+  fileProposal     String            // path/URL file proposal
+  fileProposalName String            // nama asli file
+  status           StatusPendaftaran @default(MENUNGGU)
+  catatan          String?           // catatan dari dosen/admin
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  // Dosen pembimbing (wajib 1, opsional 2)
+  dosenPembimbing1Id String
+  dosenPembimbing2Id String?
+
+  // Dosen penguji (diassign admin)
+  dosenPenguji1Id  String?
+  dosenPenguji2Id  String?
+
+  mahasiswa        Mahasiswa @relation(fields: [mahasiswaId], references: [id], onDelete: Cascade)
+  dosenPembimbing1 Dosen     @relation("Pembimbing1", fields: [dosenPembimbing1Id], references: [id])
+  dosenPembimbing2 Dosen?    @relation("Pembimbing2", fields: [dosenPembimbing2Id], references: [id])
+  dosenPenguji1    Dosen?    @relation("Penguji1", fields: [dosenPenguji1Id], references: [id])
+  dosenPenguji2    Dosen?    @relation("Penguji2", fields: [dosenPenguji2Id], references: [id])
+
+  // Riwayat persetujuan
+  persetujuan Persetujuan[]
+}
+
+model Persetujuan {
+  id                     String            @id @default(cuid())
+  pendaftaranId          String
+  dosenId                String
+  subRole                DosenSubRole
+  status                 StatusPendaftaran
+  catatan                String?
+  createdAt              DateTime          @default(now())
+
+  pendaftaran PendaftaranTugasAkhir @relation(fields: [pendaftaranId], references: [id], onDelete: Cascade)
+}
