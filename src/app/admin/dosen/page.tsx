@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { BookOpen } from "lucide-react";
 
 export default async function AdminDosenPage() {
   const session = await auth();
@@ -26,46 +27,48 @@ export default async function AdminDosenPage() {
 
       <div className="page-content">
         <div className="card">
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>Nama</th>
-                  <th>NIDN</th>
-                  <th>Program Studi</th>
-                  <th>Email</th>
-                  <th>Bimbingan Aktif</th>
-                  <th>Bergabung</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dosen.length === 0 ? (
+          {dosen.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-state-icon"><BookOpen size={48} /></div>
+              <h3 className="empty-state-title">Belum Ada Dosen</h3>
+            </div>
+          ) : (
+            <div className="table-wrapper">
+              <table>
+                <thead>
                   <tr>
-                    <td colSpan={6} style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>
-                      Belum ada data dosen
-                    </td>
+                    <th>Nama</th>
+                    <th>NIDN</th>
+                    <th>Program Studi</th>
+                    <th>Email</th>
+                    <th>Kapasitas</th>
+                    <th>Bimbingan</th>
+                    <th>Bergabung</th>
                   </tr>
-                ) : (
-                  dosen.map((d) => (
-                    <tr key={d.id}>
-                      <td><p style={{ fontWeight: 600 }}>{d.user.name}</p></td>
-                      <td>{d.nidn || "—"}</td>
-                      <td>{d.prodi || "—"}</td>
-                      <td style={{ fontSize: 13, color: "var(--text-muted)" }}>{d.user.email}</td>
-                      <td>
-                        <span className="badge badge-dosen">
-                          {d.bimbingan1.length + d.bimbingan2.length} Mahasiswa
-                        </span>
-                      </td>
-                      <td style={{ fontSize: 13, color: "var(--text-muted)" }}>
-                        {new Date(d.user.createdAt).toLocaleDateString("id-ID")}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {dosen.map((d) => {
+                    const terisi = d.bimbingan1.length + d.bimbingan2.length;
+                    return (
+                      <tr key={d.id}>
+                        <td><p style={{ fontWeight: 600 }}>{d.user.name}</p></td>
+                        <td style={{ fontFamily: "monospace", fontSize: 13, color: "var(--text-muted)" }}>{d.nidn || "—"}</td>
+                        <td style={{ color: "var(--text-muted)" }}>{d.prodi || "—"}</td>
+                        <td style={{ fontSize: 13, color: "var(--text-muted)" }}>{d.user.email}</td>
+                        <td>
+                          <span style={{ fontSize: 13, color: "var(--text-muted)" }}>{terisi}/{d.maxSlot}</span>
+                        </td>
+                        <td><span className="badge badge-dosen">{terisi} Mahasiswa</span></td>
+                        <td style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                          {new Date(d.user.createdAt).toLocaleDateString("id-ID")}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     </>

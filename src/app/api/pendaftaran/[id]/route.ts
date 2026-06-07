@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
 const updateSchema = z.object({
-  status: z.enum(["DITERIMA", "DITOLAK", "REVISI", "DISETUJUI_ADMIN"]),
+  status: z.enum(["DITERIMA", "DITOLAK", "DISETUJUI_ADMIN"]),
   catatan: z.string().optional(),
   subRole: z.enum(["PEMBIMBING_1", "PEMBIMBING_2", "PENGUJI_1", "PENGUJI_2"]).optional(),
 });
