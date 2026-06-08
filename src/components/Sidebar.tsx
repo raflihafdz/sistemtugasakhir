@@ -15,6 +15,8 @@ import {
   BookOpen,
   LogOut,
   GalleryVerticalEnd,
+  CalendarDays,
+  BookMarked,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -31,6 +33,7 @@ const navItems = {
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/dosen/bimbingan", label: "Permintaan Bimbingan", icon: Inbox },
     { href: "/dosen/mahasiswa", label: "Daftar Mahasiswa", icon: Users },
+    { href: "/dosen/jadwal", label: "Jadwal Saya", icon: CalendarDays },
     { href: "/dosen/slot", label: "Pengaturan Slot", icon: Settings },
   ],
   ADMIN: [

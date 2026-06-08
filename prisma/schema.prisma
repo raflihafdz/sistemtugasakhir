@@ -1,5 +1,4 @@
 // Prisma Schema - Sistem Tugas Akhir
-// Generator menggunakan prisma-client-js (standard Prisma v6)
 
 generator client {
   provider = "prisma-client-js"
@@ -26,30 +25,33 @@ enum DosenSubRole {
 }
 
 enum StatusPendaftaran {
-  MENUNGGU       // Menunggu konfirmasi dosen
-  DITERIMA       // Diterima dosen pembimbing
-  DITOLAK        // Ditolak dosen pembimbing
-  DISETUJUI_ADMIN // Final disetujui admin
+  MENUNGGU
+  DITERIMA
+  DITOLAK
+  DISETUJUI_ADMIN
+}
+
+enum StatusJadwal {
+  TERSEDIA
+  TERISI
+  DIBATALKAN
 }
 
 // ===================== MODELS =====================
 
 model User {
-  id            String    @id @default(cuid())
-  name          String
-  email         String    @unique
-  password      String
-  role          Role      @default(MAHASISWA)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(MAHASISWA)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  // Relasi ke profil masing-masing role
-  mahasiswa     Mahasiswa?
-  dosen         Dosen?
-
-  // NextAuth sessions
-  sessions      Session[]
-  accounts      Account[]
+  mahasiswa Mahasiswa?
+  dosen     Dosen?
+  sessions  Session[]
+  accounts  Account[]
 }
 
 model Account {
@@ -96,8 +98,9 @@ model Mahasiswa {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
   pendaftaranTugasAkhir PendaftaranTugasAkhir[]
+  jadwalBimbingan       JadwalBimbingan[]
 }
 
 model Dosen {
@@ -111,34 +114,30 @@ model Dosen {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Sebagai dosen pembimbing 1
   bimbingan1 PendaftaranTugasAkhir[] @relation("Pembimbing1")
-  // Sebagai dosen pembimbing 2
   bimbingan2 PendaftaranTugasAkhir[] @relation("Pembimbing2")
-  // Sebagai dosen penguji 1
   pengujian1 PendaftaranTugasAkhir[] @relation("Penguji1")
-  // Sebagai dosen penguji 2
   pengujian2 PendaftaranTugasAkhir[] @relation("Penguji2")
+
+  jadwalBimbingan JadwalBimbingan[]
+  jadwalSidang    JadwalSidang[]
 }
 
 model PendaftaranTugasAkhir {
   id               String            @id @default(cuid())
   mahasiswaId      String
   judulTA          String
-  fileProposal     String            // path/URL file proposal
-  fileProposalName String            // nama asli file
+  fileProposal     String
+  fileProposalName String
   status           StatusPendaftaran @default(MENUNGGU)
-  catatan          String?           // catatan dari dosen/admin
+  catatan          String?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 
-  // Dosen pembimbing (wajib 1, opsional 2)
   dosenPembimbing1Id String
   dosenPembimbing2Id String?
-
-  // Dosen penguji (diassign admin)
-  dosenPenguji1Id  String?
-  dosenPenguji2Id  String?
+  dosenPenguji1Id    String?
+  dosenPenguji2Id    String?
 
   mahasiswa        Mahasiswa @relation(fields: [mahasiswaId], references: [id], onDelete: Cascade)
   dosenPembimbing1 Dosen     @relation("Pembimbing1", fields: [dosenPembimbing1Id], references: [id])
@@ -146,18 +145,62 @@ model PendaftaranTugasAkhir {
   dosenPenguji1    Dosen?    @relation("Penguji1", fields: [dosenPenguji1Id], references: [id])
   dosenPenguji2    Dosen?    @relation("Penguji2", fields: [dosenPenguji2Id], references: [id])
 
-  // Riwayat persetujuan
-  persetujuan Persetujuan[]
+  persetujuan     Persetujuan[]
+  jadwalBimbingan JadwalBimbingan[]
+  jadwalSidang    JadwalSidang[]
 }
 
 model Persetujuan {
-  id                     String            @id @default(cuid())
-  pendaftaranId          String
-  dosenId                String
-  subRole                DosenSubRole
-  status                 StatusPendaftaran
-  catatan                String?
-  createdAt              DateTime          @default(now())
+  id            String            @id @default(cuid())
+  pendaftaranId String
+  dosenId       String
+  subRole       DosenSubRole
+  status        StatusPendaftaran
+  catatan       String?
+  createdAt     DateTime          @default(now())
 
   pendaftaran PendaftaranTugasAkhir @relation(fields: [pendaftaranId], references: [id], onDelete: Cascade)
+}
+
+// ===================== JADWAL =====================
+
+/// Sesi bimbingan rutin yang dibuat dosen, bisa di-assign ke satu mahasiswa
+model JadwalBimbingan {
+  id            String       @id @default(cuid())
+  dosenId       String
+  tanggal       DateTime     @db.Date
+  waktuMulai    String       // "HH:MM"
+  waktuSelesai  String       // "HH:MM"
+  keterangan    String?
+  status        StatusJadwal @default(TERSEDIA)
+  // Koneksi ke mahasiswa & pendaftaran (opsional — diisi saat sesi diassign)
+  mahasiswaId   String?
+  pendaftaranId String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  dosen       Dosen                  @relation(fields: [dosenId], references: [id], onDelete: Cascade)
+  mahasiswa   Mahasiswa?             @relation(fields: [mahasiswaId], references: [id])
+  pendaftaran PendaftaranTugasAkhir? @relation(fields: [pendaftaranId], references: [id])
+
+  @@index([dosenId, tanggal])
+}
+
+/// Window ketersediaan dosen untuk sidang; bisa di-link ke pendaftaran
+model JadwalSidang {
+  id                    String       @id @default(cuid())
+  dosenId               String
+  tanggal               DateTime     @db.Date
+  waktuMulaiAvailable   String       // "HH:MM" — mulai dosen available
+  waktuSelesaiAvailable String       // "HH:MM" — selesai dosen available
+  keterangan            String?
+  status                StatusJadwal @default(TERSEDIA)
+  pendaftaranId         String?      // diisi saat slot ini digunakan untuk sidang mahasiswa
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  dosen       Dosen                  @relation(fields: [dosenId], references: [id], onDelete: Cascade)
+  pendaftaran PendaftaranTugasAkhir? @relation(fields: [pendaftaranId], references: [id])
+
+  @@index([dosenId, tanggal])
 }
