@@ -46,7 +46,12 @@ export default function BimbinganPage() {
     }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      fetchData();
+    }, 0);
+    return () => clearTimeout(t);
+  }, [fetchData]);
 
   const openModal = (p: Pendaftaran) => {
     setSelected(p);

@@ -11,7 +11,7 @@ const pendaftaranSchema = z.object({
   dosenPembimbing2Id: z.string().optional(),
 });
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const session = await auth();
     if (!session) {

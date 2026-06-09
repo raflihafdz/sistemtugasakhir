@@ -44,9 +44,14 @@ export default function DaftarTAPage() {
   };
 
   useEffect(() => {
-    fetchDosen();
+    const t = setTimeout(() => {
+      fetchDosen();
+    }, 0);
     const interval = setInterval(fetchDosen, 30000); // refresh tiap 30 detik
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(t);
+      clearInterval(interval);
+    };
   }, []);
 
   const handleChange = (

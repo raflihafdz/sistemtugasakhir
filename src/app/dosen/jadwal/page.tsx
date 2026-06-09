@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Plus, Trash2, X, Clock, AlertCircle, Loader2
 
 interface JB { id:string; tanggal:string; waktuMulai:string; waktuSelesai:string; keterangan:string|null; status:string; mahasiswa:{user:{name:string}}|null; }
 interface JS { id:string; tanggal:string; waktuMulaiAvailable:string; waktuSelesaiAvailable:string; keterangan:string|null; status:string; pendaftaran:{judulTA:string;mahasiswa:{user:{name:string}}}|null; }
+interface TM { id:string; tanggal:string; judul:string; keterangan:string|null; }
 
 const DAYS = ["Sen","Sel","Rab","Kam","Jum","Sab","Min"];
 const MONTHS = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
@@ -24,6 +25,7 @@ export default function JadwalPage(){
   const [cur, setCur] = useState(new Date());
   const [bList, setBList] = useState<JB[]>([]);
   const [sList, setSList] = useState<JS[]>([]);
+  const [tMerah, setTMerah] = useState<TM[]>([]);
   const [loading, setLoading] = useState(false);
   const [sel, setSel] = useState<string|null>(null);
   const [tab, setTab] = useState<"bimbingan"|"sidang">("bimbingan");
@@ -39,14 +41,28 @@ export default function JadwalPage(){
 
   const fetch_ = useCallback(async()=>{
     setLoading(true);
-    const [rb,rs] = await Promise.all([
-      fetch(`/api/jadwal/bimbingan?bulan=${bulanStr}`).then(r=>r.json()),
-      fetch(`/api/jadwal/sidang?bulan=${bulanStr}`).then(r=>r.json()),
-    ]);
-    setBList(Array.isArray(rb)?rb:[]); setSList(Array.isArray(rs)?rs:[]); setLoading(false);
+    try {
+      const [rb,rs,rt] = await Promise.all([
+        fetch(`/api/jadwal/bimbingan?bulan=${bulanStr}`).then(r=>r.json()),
+        fetch(`/api/jadwal/sidang?bulan=${bulanStr}`).then(r=>r.json()),
+        fetch(`/api/tanggal-merah?bulan=${bulanStr}`).then(r=>r.json()),
+      ]);
+      setBList(Array.isArray(rb)?rb:[]);
+      setSList(Array.isArray(rs)?rs:[]);
+      setTMerah(Array.isArray(rt)?rt:[]);
+    } catch(e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
   },[bulanStr]);
 
-  useEffect(()=>{ fetch_(); },[fetch_]);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      fetch_();
+    }, 0);
+    return () => clearTimeout(t);
+  }, [fetch_]);
 
   const nav=(d:number)=>{ const n=new Date(cur); n.setMonth(n.getMonth()+d); setCur(n); setSel(null); };
 
@@ -60,11 +76,14 @@ export default function JadwalPage(){
   // Group by day
   const bByDay = bList.reduce<Record<string,JB[]>>((a,j)=>{ const k=j.tanggal.split("T")[0]; (a[k]=a[k]||[]).push(j); return a; },{});
   const sByDay = sList.reduce<Record<string,JS[]>>((a,j)=>{ const k=j.tanggal.split("T")[0]; (a[k]=a[k]||[]).push(j); return a; },{});
+  const tmByDay = tMerah.reduce<Record<string,TM>>((a,j)=>{ const k=j.tanggal.split("T")[0]; a[k]=j; return a; },{});
 
   const selBList = sel ? (bByDay[sel]||[]) : [];
   const selSList = sel ? (sByDay[sel]||[]).sort((a,b)=>a.waktuMulaiAvailable.localeCompare(b.waktuMulaiAvailable)) : [];
+  const selTM = sel ? tmByDay[sel]||null : null;
 
   const openAdd=(type:"bimbingan"|"sidang")=>{
+    if (selTM) return; // Prevent action if today is holiday
     setAddType(type); setErr("");
     const nextHour = selSList.length>0 ? selSList[selSList.length-1].waktuSelesaiAvailable : "08:00";
     const [h,mm_] = nextHour.split(":").map(Number);
@@ -121,7 +140,7 @@ export default function JadwalPage(){
 
           {/* Legend */}
           <div style={{display:"flex",gap:16,marginBottom:12,padding:"0 2px",flexWrap:"wrap"}}>
-            {[{c:"#7C3AED",l:"Bimbingan"},{c:"#D97706",l:"Sidang"}].map(({c,l})=>(
+            {[{c:"#7C3AED",l:"Bimbingan"},{c:"#D97706",l:"Sidang"},{c:"#EF4444",l:"Libur Akademik"}].map(({c,l})=>(
               <div key={l} style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"var(--text-muted)"}}>
                 <span style={{width:10,height:10,borderRadius:3,background:c,display:"inline-block"}}/>
                 {l}
@@ -143,9 +162,10 @@ export default function JadwalPage(){
                 const key=toKey(date);
                 const dayB=bByDay[key]||[];
                 const dayS=sByDay[key]||[];
+                const dayTM=tmByDay[key]||null;
                 const isToday=key===today;
                 const isSel=key===sel;
-                const hasEvents=dayB.length>0||dayS.length>0;
+                const hasEvents=dayB.length>0||dayS.length>0||dayTM!==null;
 
                 return(
                   <div key={key} onClick={()=>setSel(isSel?null:key)}
@@ -153,20 +173,32 @@ export default function JadwalPage(){
                       minHeight:88,padding:"7px 5px",
                       borderRight:"1px solid var(--border)",borderBottom:"1px solid var(--border)",
                       cursor:"pointer",transition:"background 0.12s",
-                      background:isSel?"rgba(124,58,237,0.05)":"white",
+                      background: dayTM ? "rgba(239,68,68,0.03)" : isSel?"rgba(124,58,237,0.05)":"white",
                       position:"relative",
                     }}
-                    onMouseEnter={e=>{if(!isSel)(e.currentTarget as HTMLElement).style.background="var(--bg-hover)";}}
-                    onMouseLeave={e=>{if(!isSel)(e.currentTarget as HTMLElement).style.background="white";}}
+                    onMouseEnter={e=>{if(!isSel)(e.currentTarget as HTMLElement).style.background=dayTM?"rgba(239,68,68,0.06)":"var(--bg-hover)";}}
+                    onMouseLeave={e=>{if(!isSel)(e.currentTarget as HTMLElement).style.background=dayTM?"rgba(239,68,68,0.03)":"white";}}
                   >
                     <div style={{
                       width:26,height:26,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
-                      fontSize:12,fontWeight:isToday||isSel?700:400,marginBottom:3,
-                      background:isToday?"var(--primary)":isSel?"var(--primary-bg)":"transparent",
-                      color:isToday?"white":isSel?"var(--primary)":"var(--text)",
+                      fontSize:12,fontWeight:isToday||isSel||dayTM?700:400,marginBottom:3,
+                      background:dayTM?"#EF4444":isToday?"var(--primary)":isSel?"var(--primary-bg)":"transparent",
+                      color:dayTM||isToday?"white":isSel?"var(--primary)":"var(--text)",
                     }}>{date.getDate()}</div>
 
                     <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                      {/* Tanggal Merah Banner */}
+                      {dayTM && (
+                        <div style={{
+                          background:"rgba(239,68,68,0.12)",borderLeft:"2px solid #EF4444",
+                          borderRadius:"0 3px 3px 0",padding:"1px 4px",
+                          fontSize:9,color:"#DC2626",fontWeight:700,
+                          whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",
+                        }} title={dayTM.judul}>
+                          🔴 {dayTM.judul}
+                        </div>
+                      )}
+
                       {/* Bimbingan chips */}
                       {dayB.slice(0,2).map(b=>(
                         <div key={b.id} style={{
@@ -177,6 +209,7 @@ export default function JadwalPage(){
                         }}>{b.waktuMulai}–{b.waktuSelesai}</div>
                       ))}
                       {dayB.length>2 && <div style={{fontSize:9,color:"var(--text-dim)",paddingLeft:4}}>+{dayB.length-2} bimbingan</div>}
+                      
                       {/* Sidang chips */}
                       {dayS.slice(0,2).map(s=>(
                         <div key={s.id} style={{
@@ -194,6 +227,7 @@ export default function JadwalPage(){
                       <div style={{position:"absolute",bottom:4,right:5,display:"flex",gap:2}}>
                         {dayB.length>0&&<span style={{width:5,height:5,borderRadius:"50%",background:"#7C3AED"}}/>}
                         {dayS.length>0&&<span style={{width:5,height:5,borderRadius:"50%",background:"#D97706"}}/>}
+                        {dayTM!==null&&<span style={{width:5,height:5,borderRadius:"50%",background:"#EF4444"}}/>}
                       </div>
                     )}
                     {isSel&&<div style={{position:"absolute",inset:0,border:"2px solid var(--primary)",pointerEvents:"none"}}/>}
@@ -209,104 +243,121 @@ export default function JadwalPage(){
           <div style={{width:310,flexShrink:0,animation:"fadeInUp 0.2s ease"}}>
             <div className="card" style={{padding:0,overflow:"hidden",position:"sticky",top:80}}>
               {/* Header */}
-              <div style={{padding:"14px 16px",background:"linear-gradient(135deg,var(--primary-bg),#EFF6FF)",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+              <div style={{padding:"14px 16px",background:selTM ? "linear-gradient(135deg,#FEF2F2,#FEE2E2)" : "linear-gradient(135deg,var(--primary-bg),#EFF6FF)",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                 <div>
-                  <p style={{fontWeight:700,fontSize:14,color:"var(--text)"}}>
+                  <p style={{fontWeight:700,fontSize:14,color:selTM ? "#991B1B" : "var(--text)"}}>
                     {new Date(sel+"T00:00:00").toLocaleDateString("id-ID",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
                   </p>
-                  <p style={{fontSize:11,color:"var(--text-muted)",marginTop:2}}>
-                    {selBList.length} bimbingan · {selSList.length} sesi sidang
+                  <p style={{fontSize:11,color:selTM ? "#C53030" : "var(--text-muted)",marginTop:2}}>
+                    {selTM ? "Tanggal Merah / Libur" : `${selBList.length} bimbingan · ${selSList.length} sesi sidang`}
                   </p>
                 </div>
                 <button className="btn btn-ghost btn-sm" onClick={()=>setSel(null)}><X size={14}/></button>
               </div>
 
-              {/* Tabs */}
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",borderBottom:"1px solid var(--border)"}}>
-                {(["bimbingan","sidang"] as const).map(t=>(
-                  <button key={t} onClick={()=>setTab(t)} style={{
-                    padding:"10px 8px",fontWeight:600,fontSize:12,border:"none",cursor:"pointer",transition:"all 0.15s",
-                    background:tab===t?"white":"var(--bg)",
-                    color:tab===t?"var(--primary)":"var(--text-muted)",
-                    borderBottom:tab===t?"2px solid var(--primary)":"2px solid transparent",
-                  }}>
-                    {t==="bimbingan"?"🟣 Bimbingan":"🟡 Sidang"}
-                    <span style={{
-                      marginLeft:5,background:t==="bimbingan"?"var(--primary-bg)":"var(--warning-bg)",
-                      color:t==="bimbingan"?"var(--primary)":"var(--warning)",
-                      borderRadius:10,padding:"1px 6px",fontSize:10,fontWeight:700,
-                    }}>
-                      {t==="bimbingan"?selBList.length:selSList.length}
-                    </span>
-                  </button>
-                ))}
-              </div>
+              {selTM ? (
+                <div style={{padding:20,textAlign:"center"}}>
+                  <div style={{width:48,height:48,borderRadius:"50%",background:"#FEF2F2",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px",border:"1px solid #FCA5A5"}}>
+                    <span style={{fontSize:20}}>🔴</span>
+                  </div>
+                  <h4 style={{fontWeight:800,color:"#991B1B",fontSize:15}}>{selTM.judul}</h4>
+                  <p style={{fontSize:13,color:"var(--text-muted)",marginTop:6,lineHeight:1.5}}>
+                    {selTM.keterangan || "Libur nasional atau agenda akademik universitas."}
+                  </p>
+                  <div style={{marginTop:16,padding:"10px 12px",background:"#FEF2F2",borderRadius:8,fontSize:12,color:"#991B1B",border:"1px dashed #FCA5A5"}}>
+                    Dosen tidak dapat mengatur atau menambahkan jadwal pada hari libur akademik.
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Tabs */}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",borderBottom:"1px solid var(--border)"}}>
+                    {(["bimbingan","sidang"] as const).map(t=>(
+                      <button key={t} onClick={()=>setTab(t)} style={{
+                        padding:"10px 8px",fontWeight:600,fontSize:12,border:"none",cursor:"pointer",transition:"all 0.15s",
+                        background:tab===t?"white":"var(--bg)",
+                        color:tab===t?"var(--primary)":"var(--text-muted)",
+                        borderBottom:tab===t?"2px solid var(--primary)":"2px solid transparent",
+                      }}>
+                        {t==="bimbingan"?"🟣 Bimbingan":"🟡 Sidang"}
+                        <span style={{
+                          marginLeft:5,background:t==="bimbingan"?"var(--primary-bg)":"var(--warning-bg)",
+                          color:t==="bimbingan"?"var(--primary)":"var(--warning)",
+                          borderRadius:10,padding:"1px 6px",fontSize:10,fontWeight:700,
+                        }}>
+                          {t==="bimbingan"?selBList.length:selSList.length}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
 
-              <div style={{padding:14,maxHeight:"55vh",overflowY:"auto"}}>
-                {tab==="bimbingan"?(
-                  <>
-                    {selBList.length===0?(
-                      <p style={{textAlign:"center",color:"var(--text-muted)",fontSize:13,padding:"18px 0"}}>Belum ada sesi bimbingan</p>
-                    ):(
-                      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:10}}>
-                        {selBList.map(b=>(
-                          <div key={b.id} style={{background:"var(--bg)",borderRadius:8,padding:"9px 11px",border:"1px solid var(--border)",display:"flex",alignItems:"flex-start",gap:9}}>
-                            <div style={{width:3,alignSelf:"stretch",borderRadius:4,background:"#7C3AED",flexShrink:0}}/>
-                            <div style={{flex:1}}>
-                              <p style={{fontWeight:700,fontSize:13,color:"var(--text)"}}>{b.waktuMulai} – {b.waktuSelesai}</p>
-                              <p style={{fontSize:11,color:"var(--text-dim)"}}>{dur(b.waktuMulai,b.waktuSelesai)}</p>
-                              {b.mahasiswa&&<p style={{fontSize:11,color:"var(--text-muted)",marginTop:2}}>👤 {b.mahasiswa.user.name}</p>}
-                              {b.keterangan&&<p style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>{b.keterangan}</p>}
-                            </div>
-                            <button className="btn btn-danger btn-sm" style={{padding:"3px 7px",flexShrink:0}} onClick={()=>delB(b.id)}><Trash2 size={11}/></button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <button className="btn btn-primary btn-full btn-sm" onClick={()=>openAdd("bimbingan")}>
-                      <Plus size={13}/> Tambah Sesi Bimbingan
-                    </button>
-                  </>
-                ):(
-                  <>
-                    {selSList.length===0?(
-                      <p style={{textAlign:"center",color:"var(--text-muted)",fontSize:13,padding:"18px 0"}}>Belum ada sesi sidang</p>
-                    ):(
-                      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:10}}>
-                        {selSList.map((s,idx)=>(
-                          <div key={s.id} style={{background:"rgba(217,119,6,0.05)",borderRadius:8,padding:"9px 11px",border:"1px solid rgba(217,119,6,0.2)",display:"flex",alignItems:"flex-start",gap:9}}>
-                            <div style={{width:3,alignSelf:"stretch",borderRadius:4,background:"#D97706",flexShrink:0}}/>
-                            <div style={{flex:1}}>
-                              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
-                                <span style={{fontSize:10,fontWeight:700,background:"rgba(217,119,6,0.15)",color:"#B45309",borderRadius:4,padding:"1px 5px"}}>Sesi {idx+1}</span>
-                                <span style={{
-                                  fontSize:10,fontWeight:600,
-                                  color:s.status==="TERSEDIA"?"var(--success)":s.status==="TERISI"?"var(--warning)":"var(--danger)",
-                                }}>{s.status}</span>
+                  <div style={{padding:14,maxHeight:"55vh",overflowY:"auto"}}>
+                    {tab==="bimbingan"?(
+                      <>
+                        {selBList.length===0?(
+                          <p style={{textAlign:"center",color:"var(--text-muted)",fontSize:13,padding:"18px 0"}}>Belum ada sesi bimbingan</p>
+                        ):(
+                          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:10}}>
+                            {selBList.map(b=>(
+                              <div key={b.id} style={{background:"var(--bg)",borderRadius:8,padding:"9px 11px",border:"1px solid var(--border)",display:"flex",alignItems:"flex-start",gap:9}}>
+                                <div style={{width:3,alignSelf:"stretch",borderRadius:4,background:"#7C3AED",flexShrink:0}}/>
+                                <div style={{flex:1}}>
+                                  <p style={{fontWeight:700,fontSize:13,color:"var(--text)"}}>{b.waktuMulai} – {b.waktuSelesai}</p>
+                                  <p style={{fontSize:11,color:"var(--text-dim)"}}>{dur(b.waktuMulai,b.waktuSelesai)}</p>
+                                  {b.mahasiswa&&<p style={{fontSize:11,color:"var(--text-muted)",marginTop:2}}>👤 {b.mahasiswa.user.name}</p>}
+                                  {b.keterangan&&<p style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>{b.keterangan}</p>}
+                                </div>
+                                <button className="btn btn-danger btn-sm" style={{padding:"3px 7px",flexShrink:0}} onClick={()=>delB(b.id)}><Trash2 size={11}/></button>
                               </div>
-                              <div style={{display:"flex",alignItems:"center",gap:6}}>
-                                <Clock size={12} color="#D97706"/>
-                                <span style={{fontWeight:700,fontSize:13,color:"#B45309"}}>{s.waktuMulaiAvailable} – {s.waktuSelesaiAvailable}</span>
-                              </div>
-                              <p style={{fontSize:11,color:"var(--text-dim)",marginTop:1}}>{dur(s.waktuMulaiAvailable,s.waktuSelesaiAvailable)}</p>
-                              {s.pendaftaran&&(
-                                <p style={{fontSize:11,color:"var(--warning)",marginTop:2,fontWeight:600}}>
-                                  📌 {s.pendaftaran.mahasiswa.user.name}
-                                </p>
-                              )}
-                              {s.keterangan&&<p style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>{s.keterangan}</p>}
-                            </div>
-                            <button className="btn btn-danger btn-sm" style={{padding:"3px 7px",flexShrink:0}} onClick={()=>delS(s.id)}><Trash2 size={11}/></button>
+                            ))}
                           </div>
-                        ))}
-                      </div>
+                        )}
+                        <button className="btn btn-primary btn-full btn-sm" onClick={()=>openAdd("bimbingan")}>
+                          <Plus size={13}/> Tambah Sesi Bimbingan
+                        </button>
+                      </>
+                    ):(
+                      <>
+                        {selSList.length===0?(
+                          <p style={{textAlign:"center",color:"var(--text-muted)",fontSize:13,padding:"18px 0"}}>Belum ada sesi sidang</p>
+                        ):(
+                          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:10}}>
+                            {selSList.map((s,idx)=>(
+                              <div key={s.id} style={{background:"rgba(217,119,6,0.05)",borderRadius:8,padding:"9px 11px",border:"1px solid rgba(217,119,6,0.2)",display:"flex",alignItems:"flex-start",gap:9}}>
+                                <div style={{width:3,alignSelf:"stretch",borderRadius:4,background:"#D97706",flexShrink:0}}/>
+                                <div style={{flex:1}}>
+                                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+                                    <span style={{fontSize:10,fontWeight:700,background:"rgba(217,119,6,0.15)",color:"#B45309",borderRadius:4,padding:"1px 5px"}}>Sesi {idx+1}</span>
+                                    <span style={{
+                                      fontSize:10,fontWeight:600,
+                                      color:s.status==="TERSEDIA"?"var(--success)":s.status==="TERISI"?"var(--warning)":"var(--danger)",
+                                    }}>{s.status}</span>
+                                  </div>
+                                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                                    <Clock size={12} color="#D97706"/>
+                                    <span style={{fontWeight:700,fontSize:13,color:"#B45309"}}>{s.waktuMulaiAvailable} – {s.waktuSelesaiAvailable}</span>
+                                  </div>
+                                  <p style={{fontSize:11,color:"var(--text-dim)",marginTop:1}}>{dur(s.waktuMulaiAvailable,s.waktuSelesaiAvailable)}</p>
+                                  {s.pendaftaran&&(
+                                    <p style={{fontSize:11,color:"var(--warning)",marginTop:2,fontWeight:600}}>
+                                      📌 {s.pendaftaran.mahasiswa.user.name}
+                                    </p>
+                                  )}
+                                  {s.keterangan&&<p style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>{s.keterangan}</p>}
+                                </div>
+                                <button className="btn btn-danger btn-sm" style={{padding:"3px 7px",flexShrink:0}} onClick={()=>delS(s.id)}><Trash2 size={11}/></button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <button className="btn btn-primary btn-full btn-sm" onClick={()=>openAdd("sidang")}>
+                          <Plus size={13}/> Tambah Sesi Sidang
+                        </button>
+                      </>
                     )}
-                    <button className="btn btn-primary btn-full btn-sm" onClick={()=>openAdd("sidang")}>
-                      <Plus size={13}/> Tambah Sesi Sidang
-                    </button>
-                  </>
-                )}
-              </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         ):(
@@ -336,7 +387,7 @@ export default function JadwalPage(){
             {err&&<div className="alert alert-error"><AlertCircle size={14}/><span>{err}</span></div>}
 
             {/* ── Jam yang sudah terpakai di tanggal ini ── */}
-            {form.tanggal&&(()=>{
+            {form.tanggal&&(()=> {
               const bOccupied = (bByDay[form.tanggal]||[]).map(b=>({label:`Bimbingan ${b.waktuMulai}–${b.waktuSelesai}`,color:"#7C3AED",bg:"rgba(124,58,237,0.1)"}));
               const sOccupied = (sByDay[form.tanggal]||[]).map(s=>({label:`Sidang ${s.waktuMulaiAvailable}–${s.waktuSelesaiAvailable}`,color:"#D97706",bg:"rgba(217,119,6,0.1)"}));
               const all=[...bOccupied,...sOccupied];

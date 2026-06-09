@@ -186,6 +186,21 @@ model JadwalBimbingan {
   @@index([dosenId, tanggal])
 }
 
+// ===================== KALENDER AKADEMIK =====================
+
+/// Tanggal merah yang dikelola Admin — tampil di kalender semua dosen
+model TanggalMerah {
+  id         String   @id @default(cuid())
+  tanggal    DateTime @db.Date
+  judul      String
+  keterangan String?
+  groupId    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([tanggal])
+  @@index([groupId])
+}
 /// Window ketersediaan dosen untuk sidang; bisa di-link ke pendaftaran
 model JadwalSidang {
   id                    String       @id @default(cuid())

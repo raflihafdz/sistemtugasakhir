@@ -59,6 +59,17 @@ export async function POST(request: NextRequest) {
     const mulai = data.waktuMulaiAvailable;
     const selesai = data.waktuSelesaiAvailable;
 
+    // Cek Tanggal Merah / Libur Akademik
+    const tglMerah = await prisma.tanggalMerah.findFirst({
+      where: { tanggal }
+    });
+    if (tglMerah) {
+      return NextResponse.json(
+        { error: `Tidak dapat membuat jadwal pada hari libur akademik / tanggal merah: ${tglMerah.judul}` },
+        { status: 400 }
+      );
+    }
+
     // 1. Cek overlap dengan sesi SIDANG lain di hari yang sama
     const bentrokSidang = await prisma.jadwalSidang.findFirst({
       where: {

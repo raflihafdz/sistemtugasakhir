@@ -30,7 +30,12 @@ export default function DosenSlotPage() {
     }
   }, [session?.user?.dosenId]);
 
-  useEffect(() => { fetchInfo(); }, [fetchInfo]);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      fetchInfo();
+    }, 0);
+    return () => clearTimeout(t);
+  }, [fetchInfo]);
 
   const handleSave = async () => {
     if (!session?.user?.dosenId) return;

@@ -14,9 +14,8 @@ import {
   GraduationCap,
   BookOpen,
   LogOut,
-  GalleryVerticalEnd,
   CalendarDays,
-  BookMarked,
+  GalleryVerticalEnd,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -41,6 +40,7 @@ const navItems = {
     { href: "/admin/pendaftaran", label: "Semua Pendaftaran", icon: FileText },
     { href: "/admin/mahasiswa", label: "Data Mahasiswa", icon: GraduationCap },
     { href: "/admin/dosen", label: "Data Dosen", icon: BookOpen },
+    { href: "/admin/tanggal-merah", label: "Kalender Akademik", icon: CalendarDays },
   ],
 };
 

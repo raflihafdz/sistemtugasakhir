@@ -64,7 +64,12 @@ export default function JadwalSidangPage() {
     setLoading(false);
   }, [bulan]);
 
-  useEffect(() => { fetchJadwal(); }, [fetchJadwal]);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      fetchJadwal();
+    }, 0);
+    return () => clearTimeout(t);
+  }, [fetchJadwal]);
 
   const changeBulan = (delta: number) => {
     const [y, m] = bulan.split("-").map(Number);

@@ -75,8 +75,21 @@ export default function JadwalBimbinganPage() {
     setMahasiswaList(data);
   }, []);
 
-  useEffect(() => { fetchJadwal(); }, [fetchJadwal]);
-  useEffect(() => { if (session) fetchMahasiswa(); }, [fetchMahasiswa, session]);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      fetchJadwal();
+    }, 0);
+    return () => clearTimeout(t);
+  }, [fetchJadwal]);
+
+  useEffect(() => {
+    if (session) {
+      const t = setTimeout(() => {
+        fetchMahasiswa();
+      }, 0);
+      return () => clearTimeout(t);
+    }
+  }, [fetchMahasiswa, session]);
 
   const changeBulan = (delta: number) => {
     const [y, m] = bulan.split("-").map(Number);

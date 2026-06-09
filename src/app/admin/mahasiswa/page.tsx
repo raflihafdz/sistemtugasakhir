@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { Users, BookOpen } from "lucide-react";
+import { Users } from "lucide-react";
 
 export default async function AdminMahasiswaPage() {
   const session = await auth();
